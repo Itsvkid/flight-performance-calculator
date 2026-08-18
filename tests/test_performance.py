@@ -247,3 +247,42 @@ def test_payload_range_needs_mass_breakdown():
     )
     with pytest.raises(ValueError, match="needs oew and max_payload"):
         perf.payload_range_points(bare, 250.0, 10000)
+
+
+# ── Validation module ───────────────────────────────────────────────────────
+
+def test_every_reference_aircraft_is_self_consistent():
+    """Each published aircraft must survive the Aircraft validators."""
+    from src.validation import REFERENCES
+    for ref in REFERENCES:
+        ac = ref.aircraft
+        assert ac.oew + ac.max_payload <= ac.mass
+        assert 6.0 < ac.aspect_ratio < 12.0        # jet transport band
+        assert 14.0 < ac.lift_to_drag_max < 22.0   # jet transport band
+
+
+def test_sensitivity_band_brackets_the_point_estimate():
+    """The swept band must contain the nominal result, or the sweep is broken."""
+    from src.validation import REFERENCES, evaluate, sensitivity_band
+    for ref in REFERENCES:
+        lo, hi = sensitivity_band(ref, "range")
+        assert lo <= evaluate(ref)["range_model"] <= hi
+
+
+def test_worse_drag_polar_always_shortens_range():
+    """A monotonicity check the sweep would otherwise hide."""
+    from dataclasses import replace
+    from src.validation import B737_800, cruise_velocity, _range_at_payload
+    v = cruise_velocity(B737_800)
+    clean = replace(B737_800.aircraft, cd0=0.017)
+    dirty = replace(B737_800.aircraft, cd0=0.024)
+    args = (B737_800.published_range_payload, B737_800.cruise_altitude, v)
+    assert _range_at_payload(clean, *args) > _range_at_payload(dirty, *args)
+
+
+def test_report_states_the_compressibility_limitation():
+    """The known failure must stay in the report, not get tidied away."""
+    from src.validation import report
+    text = report()
+    assert "compressibility" in text.lower()
+    assert "0.8" in text

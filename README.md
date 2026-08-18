@@ -3,7 +3,7 @@
 Classical flight-performance metrics computed from aircraft geometry, mass and
 engine data.
 
-**Status:** In progress — model and figures complete; validation table outstanding
+**Status:** Complete — model, figures and validation done. Ready to split into its own GitHub repo.
 **Tool:** Python 3.11+, numpy, matplotlib
 
 ## Objective
@@ -63,7 +63,7 @@ unfalsifiable:
 - [x] 37 tests passing against ISO 2533 and closed-form identities
 - [x] `plotting.py` — thrust curves, flight envelope, payload-range
 - [x] 48 tests passing
-- [ ] Validation table against a published aircraft
+- [x] Validation table against three published aircraft — see [VALIDATION.md](VALIDATION.md)
 - [ ] `requirements.txt` and a README with install and usage
 - [ ] Power required vs power available curve
 - [ ] Flight envelope: altitude vs true airspeed
@@ -75,6 +75,7 @@ unfalsifiable:
 
 | Date | What was done |
 |---|---|
+| 2026-08-19 | `validation.py` + VALIDATION.md. Three aircraft, 737-800 / A320-200 / 777-300ER, spanning a 4.5x mass range. Ceiling within 8% on all three but two published values fall outside the drag-polar band — testing it apart showed the 777 gap is weight (model gives exactly 13.1 km at 92% MTOW) while the A320 gap is not, and reverses with weight, so those published figures are almost certainly certified operating altitudes rather than performance ceilings. Range percentages flatter the model: it burns all fuel in cruise while published range carries reserves. Biggest finding — the model predicts M 0.98-1.09 max speed because the polar has no compressibility term, so any speed above M 0.8 is meaningless. 52 tests. |
 | 2026-08-19 | `plotting.py` — three figures on a colour-vision-validated palette. Drawing them exposed a physics bug no unit test had: the envelope's left edge was stall speed at every altitude, but above ~12 km a jet runs out of thrust before it runs out of wing, so the true low-speed limit is thrust-limited. Added `min_level_speed`; at 13 km it returns 186 m/s against a 166 m/s stall. Envelope now closes at the apex where both limits meet. 48 tests. |
 | 2026-08-19 | `aircraft.py` + `performance.py`. Two bugs found by sanity-checking outputs against reality rather than by any test. (1) TSFC is stored mass-based, kg/(N*s), but Breguet in weights needs 1/s — the missing g made range 67 000 km. (2) Thrust ignored forward speed, so a turbofan kept its static thrust at Mach 0.8; that gave a 16.8 km ceiling and a 12 deg climb angle. Added Mattingly's high-bypass lapse. Now: ceiling 13.5 km, range 6 890 km, cruise thrust 52.5 kN — all in the right band. 37 tests pass. |
 | 2026-08-19 | Environment audited (see ../SETUP.md). `atmosphere.py`: ISA to 20 km, both layers, `AtmosphereState` dataclass with `sigma`. 14 tests pass. Reference densities at 5 km and 8 km from memory proved inconsistent with the tabulated pressures at the same altitudes — `p = rho*R*T` did not hold for them — so density tolerance is 0.2% with the ideal gas law carrying the strict internal check instead. |
