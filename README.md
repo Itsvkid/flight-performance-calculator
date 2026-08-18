@@ -1,81 +1,109 @@
-# 03 — Aircraft flight performance calculator (Python)
+# Aircraft flight performance calculator
 
-Classical flight-performance metrics computed from aircraft geometry, mass and
-engine data.
+Classical flight-performance metrics computed from first principles — ISA
+atmosphere, a parabolic drag polar, thrust lapse with altitude and Mach — and
+checked against published data for three real aircraft.
 
-**Status:** Complete — model, figures and validation done. Ready to split into its own GitHub repo.
-**Tool:** Python 3.11+, numpy, matplotlib
+The point of the project is not that it produces numbers. It is that the
+numbers are **falsifiable**: every routine either has a closed-form answer it is
+tested against, or a physical identity it must satisfy, and where the model
+disagrees with reality the disagreement is measured and explained rather than
+tuned away.
 
-## Objective
+![Flight envelope](figures/flight-envelope.png)
 
-A small, tested, installable package — not a notebook. This is the project that
-most directly backs the site's positioning, so the code quality is part of the
-deliverable. A reviewer will open `src/` before they open any plot.
+## What it computes
 
-## Formulations
-
-**ISA atmosphere** (troposphere, h < 11 km):
-
-```
-T(h) = T0 - L*h
-rho(h) = rho0 * (1 - L*h/T0) ** (g0/(R*L) - 1)
-```
-with `T0 = 288.15 K`, `L = 0.0065 K/m`, `rho0 = 1.225 kg/m^3`,
-`R = 287.05 J/(kg*K)`, `g0 = 9.80665 m/s^2`.
-
-**Drag polar:** `CD = CD0 + CL^2 / (pi * AR * e)`
-
-**Breguet range (jet):** `R = (V/ct) * (L/D) * ln(Wi/Wf)`
-
-## Module layout
-
-```
-src/
-  atmosphere.py      rho, T, p, a as functions of altitude
-  aircraft.py        dataclass: mass, S, AR, b, CD0, e, engine specs
-  performance.py     V_md, V_mp, max rate of climb, ceilings, range, endurance
-  plotting.py        power required vs available, flight envelope
-tests/
-  test_atmosphere.py sea-level and 11 km values against ISA tables
-  test_performance.py analytical checks
-figures/             output plots
-```
-
-## Validation — do not skip this
-
-Every function needs something to check it against, or the whole thing is
-unfalsifiable:
-
-- **Atmosphere:** ISA tables at 0, 5 000, 11 000 m. These are published to
-  several decimals — your function should match.
-- **Minimum drag speed:** at V_md the induced and parasite drag terms are
-  equal. Assert it.
-- **Whole model:** run a real aircraft with published numbers (a Cessna 172 or
-  a 737 both work) and compare computed range and ceiling against the type
-  certificate. Being 10% off with a stated reason is a result. Being 400% off
-  silently is a bug.
-
-## Deliverables
-
-- [x] `atmosphere.py` — ISA to 20 km, troposphere + stratosphere
-- [x] `aircraft.py` — geometry, drag polar, Mach-dependent thrust lapse
-- [x] `performance.py` — drag, climb, ceilings, range, endurance
-- [x] 37 tests passing against ISO 2533 and closed-form identities
-- [x] `plotting.py` — thrust curves, flight envelope, payload-range
-- [x] 48 tests passing
-- [x] Validation table against three published aircraft — see [VALIDATION.md](VALIDATION.md)
-- [ ] `requirements.txt` and a README with install and usage
-- [ ] Power required vs power available curve
-- [ ] Flight envelope: altitude vs true airspeed
-- [ ] Payload-range diagram
-- [ ] Validation table: computed vs published, with the discrepancy explained
-- [ ] Its own GitHub repository
-
-## Log
-
-| Date | What was done |
+| | |
 |---|---|
-| 2026-08-19 | `validation.py` + VALIDATION.md. Three aircraft, 737-800 / A320-200 / 777-300ER, spanning a 4.5x mass range. Ceiling within 8% on all three but two published values fall outside the drag-polar band — testing it apart showed the 777 gap is weight (model gives exactly 13.1 km at 92% MTOW) while the A320 gap is not, and reverses with weight, so those published figures are almost certainly certified operating altitudes rather than performance ceilings. Range percentages flatter the model: it burns all fuel in cruise while published range carries reserves. Biggest finding — the model predicts M 0.98-1.09 max speed because the polar has no compressibility term, so any speed above M 0.8 is meaningless. 52 tests. |
-| 2026-08-19 | `plotting.py` — three figures on a colour-vision-validated palette. Drawing them exposed a physics bug no unit test had: the envelope's left edge was stall speed at every altitude, but above ~12 km a jet runs out of thrust before it runs out of wing, so the true low-speed limit is thrust-limited. Added `min_level_speed`; at 13 km it returns 186 m/s against a 166 m/s stall. Envelope now closes at the apex where both limits meet. 48 tests. |
-| 2026-08-19 | `aircraft.py` + `performance.py`. Two bugs found by sanity-checking outputs against reality rather than by any test. (1) TSFC is stored mass-based, kg/(N*s), but Breguet in weights needs 1/s — the missing g made range 67 000 km. (2) Thrust ignored forward speed, so a turbofan kept its static thrust at Mach 0.8; that gave a 16.8 km ceiling and a 12 deg climb angle. Added Mattingly's high-bypass lapse. Now: ceiling 13.5 km, range 6 890 km, cruise thrust 52.5 kN — all in the right band. 37 tests pass. |
-| 2026-08-19 | Environment audited (see ../SETUP.md). `atmosphere.py`: ISA to 20 km, both layers, `AtmosphereState` dataclass with `sigma`. 14 tests pass. Reference densities at 5 km and 8 km from memory proved inconsistent with the tabulated pressures at the same altitudes — `p = rho*R*T` did not hold for them — so density tolerance is 0.2% with the ideal gas law carrying the strict internal check instead. |
+| **Atmosphere** | ISO 2533 to 20 km — troposphere and isothermal stratosphere |
+| **Aerodynamics** | Lift and drag coefficients, L/D, stall speed |
+| **Speeds** | Minimum-drag speed, best-range speed, min and max level speed |
+| **Climb** | Rate of climb, absolute and service ceilings |
+| **Mission** | Breguet range, endurance, payload-range diagram |
+| **Figures** | Thrust curves, flight envelope, payload-range |
+
+## Quick start
+
+```bash
+pip install -r requirements.txt
+python3 -m pytest          # 52 tests
+```
+
+```python
+from src.aircraft import NARROWBODY_TWIN as ac
+from src import performance as perf
+
+perf.v_min_drag(ac, 10000)         # minimum drag speed at 10 km, m/s
+perf.service_ceiling(ac)           # m
+perf.max_rate_of_climb(ac, 0)      # (m/s, m/s) — best rate and the speed for it
+
+from src.plotting import generate_all
+generate_all(ac)                   # writes the three figures
+```
+
+## Validation
+
+Full results and caveats in **[VALIDATION.md](VALIDATION.md)**, generated by the
+same code that computes them so the write-up cannot drift from the model.
+
+Three aircraft across a 4.5× mass range — 737-800, A320-200, 777-300ER.
+Manufacturers do not publish CD0 or Oswald efficiency, so every result carries a
+band swept across the plausible range of both; a published figure inside that
+band is the honest form of agreement.
+
+| Quantity | Verdict |
+|---|---|
+| Service ceiling | Within 8% on all three. Two published figures fall outside the drag-polar band — the 777 gap is weight (the model returns the published 13.1 km at 92% MTOW), the A320 gap is not, and is most likely a certified operating altitude rather than a performance ceiling |
+| Range | Right order, wrong definition — the model burns all fuel in cruise while published range carries reserves. Use the implied-payload column, not the percentage |
+| **Maximum speed** | **Not usable above M 0.8** — see below |
+| (L/D)max | 17–18 across all three, the right band for a jet transport |
+
+## Known limitations
+
+**No compressibility drag.** The parabolic polar has no wave-drag term, so drag
+never rises at the divergence Mach number and the solver happily finds a
+transonic thrust–drag intersection. The model predicts a maximum speed of Mach
+0.98–1.09 for aircraft that cruise at 0.78–0.84. **Any maximum-speed result
+above about Mach 0.8 is meaningless**, and the flight envelope's right-hand
+boundary inherits the same caution. Adding a wave-drag rise above M_dd is the
+clearest next improvement.
+
+**Cruise is flown at constant altitude and speed.** Real aircraft step-climb as
+fuel burns to hold CL near its optimum. For the 777-300ER, L/D decays from 18.0
+to 16.9 over the cruise against a maximum of 18.1 — a step climb holds it near
+the peak, and that difference is most of the range shortfall at maximum payload.
+
+**Jet formulations only.** Propeller aircraft need power-based equivalents.
+
+**Reference data needs primary sources.** The published figures are from the
+open literature and carried in code, not transcribed from airport planning
+documents or type certificate data sheets. Verify before citing.
+
+## Three bugs worth recording
+
+Every one of these produced perfectly self-consistent numbers. None would have
+been caught by comparing against stored output — they were only wrong against
+the physical world, and two became visible only once plotted.
+
+1. **A factor of g.** TSFC is stored mass-based in kg/(N·s), the standard form,
+   but Breguet expressed in weights needs 1/s. The missing conversion put the
+   range at 67 000 km.
+2. **Thrust that ignored forward speed.** A turbofan kept full static thrust at
+   cruise Mach, giving a 16.8 km ceiling and a 12° climb angle. Fixed with
+   Mattingly's high-bypass lapse.
+3. **A stall-limited envelope.** The envelope's left edge was stall speed at
+   every altitude. Above roughly 12 km a jet runs out of thrust before it runs
+   out of wing, so the true low-speed boundary is thrust-limited — the chart was
+   claiming level flight where the aircraft cannot hold height.
+
+## Layout
+
+```
+src/atmosphere.py    ISA model
+src/aircraft.py      geometry, drag polar, engine
+src/performance.py   drag, climb, ceilings, range, endurance
+src/plotting.py      figures on a colour-vision-validated palette
+src/validation.py    published-data comparison, generates VALIDATION.md
+tests/               52 tests
+```
