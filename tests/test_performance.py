@@ -175,3 +175,75 @@ def test_range_is_physically_plausible():
 def test_rejects_impossible_weight_ratio():
     with pytest.raises(ValueError, match="must exceed final weight"):
         perf.breguet_range(AC, 250.0, 10000, AC.weight, AC.weight * 1.1)
+
+
+# ── Envelope boundaries ─────────────────────────────────────────────────────
+
+def test_low_speed_limit_is_stall_down_low():
+    """Near sea level the wing gives out before the engines do."""
+    for h in (0, 5000, 8000):
+        assert perf.min_level_speed(AC, h) == pytest.approx(
+            perf.stall_speed(AC, h), rel=1e-9
+        )
+
+
+def test_low_speed_limit_becomes_thrust_limited_up_high():
+    """Above ~12 km the boundary is thrust, not stall.
+
+    Drawing the envelope's left edge as stall speed at altitude claims level
+    flight where the aircraft cannot hold height — this is the check that
+    stops that from coming back.
+    """
+    h = 13000
+    assert perf.min_level_speed(AC, h) > perf.stall_speed(AC, h) * 1.05
+
+
+def test_envelope_closes_at_the_absolute_ceiling():
+    """Both boundaries meet at the ceiling: one speed, zero excess thrust."""
+    h = perf.absolute_ceiling(AC) - 1.0
+    assert perf.min_level_speed(AC, h) == pytest.approx(
+        perf.max_level_speed(AC, h), rel=5e-2
+    )
+
+
+def test_no_level_flight_above_the_ceiling():
+    h = perf.absolute_ceiling(AC) + 200.0
+    assert perf.max_level_speed(AC, h) is None
+    assert perf.min_level_speed(AC, h) is None
+
+
+def test_max_level_speed_exceeds_min_drag_speed():
+    for h in (0, 6000, 11000):
+        assert perf.max_level_speed(AC, h) > perf.v_min_drag(AC, h)
+
+
+# ── Payload-range ───────────────────────────────────────────────────────────
+
+def test_payload_range_has_the_right_shape():
+    points = perf.payload_range_points(AC, 250.0, 10000)
+    ranges = [r for r, _ in points]
+    payloads = [p for _, p in points]
+
+    assert ranges[0] == 0.0                      # A: no fuel, no range
+    assert payloads[0] == AC.max_payload         # A and B at max payload
+    assert payloads[1] == AC.max_payload
+    assert payloads[-1] == 0.0                   # D: ferry
+    assert all(a < b for a, b in zip(ranges, ranges[1:]))       # range grows
+    assert all(a >= b for a, b in zip(payloads, payloads[1:]))  # payload falls
+
+
+def test_payload_range_respects_mtow():
+    """No corner may exceed maximum take-off mass."""
+    for _, payload in perf.payload_range_points(AC, 250.0, 10000):
+        fuel = min(AC.fuel_mass, AC.mass - AC.oew - payload)
+        assert AC.oew + payload + fuel <= AC.mass + 1e-6
+
+
+def test_payload_range_needs_mass_breakdown():
+    bare = Aircraft(
+        name="No breakdown", mass=70000.0, fuel_mass=18000.0,
+        wing_area=124.6, span=34.3, cd0=0.020, oswald=0.80,
+        thrust_sl=220000.0, tsfc=1.7e-5,
+    )
+    with pytest.raises(ValueError, match="needs oew and max_payload"):
+        perf.payload_range_points(bare, 250.0, 10000)

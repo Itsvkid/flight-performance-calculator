@@ -191,3 +191,96 @@ def endurance(aircraft, velocity, altitude, weight_initial=None,
     ld = lift_to_drag(aircraft, velocity, altitude, wi)
     ct = aircraft.tsfc * G0
     return (1.0 / ct) * ld * math.log(wi / wf)
+
+
+def payload_range_points(aircraft, velocity, altitude):
+    """The four corners of a payload-range diagram.
+
+    Returns [(range_m, payload_kg), ...] for:
+
+    A. Max payload, no fuel                       — range zero, the y-intercept
+    B. Max payload, fuel filling the rest of MTOW — the flat segment ends here
+    C. Max fuel, payload cut to stay at MTOW      — the sloped trade segment
+    D. Max fuel, zero payload                     — ferry range
+
+    The B-to-C slope is the whole point of the diagram: once the tanks are the
+    binding constraint, every extra kilometre is bought by offloading payload.
+    An aircraft whose OEW, max payload and max fuel sum below MTOW has no such
+    segment, and B and C collapse onto each other.
+    """
+    if aircraft.oew is None or aircraft.max_payload is None:
+        raise ValueError(
+            f"{aircraft.name} needs oew and max_payload for a payload-range "
+            f"diagram; both are None."
+        )
+
+    def _range(tow_kg: float, fuel_kg: float) -> float:
+        if fuel_kg <= 0:
+            return 0.0
+        wi = tow_kg * G0
+        wf = (tow_kg - fuel_kg) * G0
+        return breguet_range(aircraft, velocity, altitude, wi, wf)
+
+    mtow, oew = aircraft.mass, aircraft.oew
+    max_payload, max_fuel = aircraft.max_payload, aircraft.fuel_mass
+
+    fuel_at_max_payload = min(mtow - oew - max_payload, max_fuel)
+    payload_at_max_fuel = max(0.0, min(max_payload, mtow - oew - max_fuel))
+
+    return [
+        (0.0, max_payload),
+        (_range(oew + max_payload + fuel_at_max_payload, fuel_at_max_payload),
+         max_payload),
+        (_range(oew + payload_at_max_fuel + max_fuel, max_fuel),
+         payload_at_max_fuel),
+        (_range(oew + max_fuel, max_fuel), 0.0),
+    ]
+
+
+def max_level_speed(aircraft, altitude, weight=None) -> float | None:
+    """Fastest speed where thrust still matches drag, m/s.
+
+    Returns None when the aircraft cannot sustain level flight at all at this
+    altitude — which is what defines the top of the flight envelope.
+    """
+    def excess(v: float) -> float:
+        return aircraft.thrust_available(altitude, v) - drag(
+            aircraft, v, altitude, weight
+        )
+
+    v_md = v_min_drag(aircraft, altitude, weight)
+    if excess(v_md) <= 0:
+        return None
+
+    upper = v_md
+    for _ in range(60):
+        upper *= 1.05
+        if excess(upper) < 0:
+            return brentq(excess, v_md, upper, xtol=1e-3)
+    return None
+
+
+def min_level_speed(aircraft, altitude, weight=None) -> float | None:
+    """Slowest speed where level flight is actually sustainable, m/s.
+
+    Not the same as stall speed. Low and slow, induced drag climbs steeply, and
+    above roughly 10 km a jet runs out of thrust before it runs out of wing —
+    the low-speed boundary of the envelope becomes thrust-limited, not
+    stall-limited. Returning the stall speed there would claim flight is
+    possible where the aircraft cannot hold height.
+
+    Returns None when level flight is impossible at any speed.
+    """
+    def excess(v: float) -> float:
+        return aircraft.thrust_available(altitude, v) - drag(
+            aircraft, v, altitude, weight
+        )
+
+    v_md = v_min_drag(aircraft, altitude, weight)
+    if excess(v_md) <= 0:
+        return None
+
+    v_stall = stall_speed(aircraft, altitude, weight)
+    if excess(v_stall) >= 0:
+        return v_stall          # wing gives out before the engines do
+    return brentq(excess, v_stall, v_md, xtol=1e-3)

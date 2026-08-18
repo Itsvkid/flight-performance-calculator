@@ -34,6 +34,8 @@ class Aircraft:
                   Breguet needs it weight based and multiplies by g itself
     cl_max        maximum lift coefficient, clean
     lapse_exp     thrust lapse exponent n in T(h) = T_sl * sigma**n
+    oew           operating empty mass, kg — needed for payload-range
+    max_payload   maximum structural payload, kg
     """
 
     name: str
@@ -47,6 +49,8 @@ class Aircraft:
     tsfc: float
     cl_max: float = 1.4
     lapse_exp: float = 0.7
+    oew: float | None = None
+    max_payload: float | None = None
 
     def __post_init__(self) -> None:
         for field, value in (
@@ -62,6 +66,13 @@ class Aircraft:
             raise ValueError(f"oswald must be in (0, 1], got {self.oswald}")
         if self.fuel_mass >= self.mass:
             raise ValueError("fuel_mass cannot equal or exceed total mass")
+        if self.oew is not None and self.max_payload is not None:
+            # The interesting case is a deliberately over-subscribed aircraft:
+            # OEW + max payload + max fuel exceeding MTOW is what produces the
+            # sloped middle segment of a payload-range diagram. Only the
+            # degenerate case where payload alone busts MTOW is rejected.
+            if self.oew + self.max_payload > self.mass:
+                raise ValueError("oew + max_payload cannot exceed MTOW")
 
     # ── Derived geometry ────────────────────────────────────────────────────
 
@@ -147,4 +158,6 @@ NARROWBODY_TWIN = Aircraft(
     thrust_sl=2 * 110000.0,
     tsfc=1.7e-5,   # ~0.6 lb/(lbf*h), typical high-bypass turbofan
     cl_max=1.5,
+    oew=41500.0,
+    max_payload=18000.0,
 )
