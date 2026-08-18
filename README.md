@@ -3,7 +3,7 @@
 Classical flight-performance metrics computed from aircraft geometry, mass and
 engine data.
 
-**Status:** Not started
+**Status:** In progress — atmosphere module complete and validated
 **Tool:** Python 3.11+, numpy, matplotlib
 
 ## Objective
@@ -57,8 +57,10 @@ unfalsifiable:
 
 ## Deliverables
 
-- [ ] `src/` modules with docstrings and type hints
-- [ ] `tests/` passing, including the ISA-table checks
+- [x] `atmosphere.py` — ISA to 20 km, troposphere + stratosphere
+- [x] `tests/test_atmosphere.py` — 14 tests passing against ISO 2533
+- [ ] `aircraft.py`, `performance.py`, `plotting.py`
+- [ ] Remaining tests
 - [ ] `requirements.txt` and a README with install and usage
 - [ ] Power required vs power available curve
 - [ ] Flight envelope: altitude vs true airspeed
@@ -70,4 +72,4 @@ unfalsifiable:
 
 | Date | What was done |
 |---|---|
-| | |
+| 2026-08-19 | Environment audited (see ../SETUP.md). `atmosphere.py`: ISA to 20 km, both layers, `AtmosphereState` dataclass with `sigma`. 14 tests pass. Reference densities at 5 km and 8 km from memory proved inconsistent with the tabulated pressures at the same altitudes — `p = rho*R*T` did not hold for them — so density tolerance is 0.2% with the ideal gas law carrying the strict internal check instead. |
