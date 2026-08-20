@@ -29,7 +29,8 @@ def _weight(aircraft: Aircraft, weight: float | None) -> float:
 
 # ── Aerodynamics ────────────────────────────────────────────────────────────
 
-def lift_coefficient(aircraft, velocity, altitude, weight=None) -> float:
+def lift_coefficient(aircraft: Aircraft, velocity: float, altitude: float,
+                      weight: float | None = None) -> float:
     """CL required for level flight: CL = 2W / (rho*V^2*S)."""
     w = _weight(aircraft, weight)
     return 2.0 * w / (density(altitude) * velocity**2 * aircraft.wing_area)
@@ -40,19 +41,22 @@ def drag_coefficient(aircraft: Aircraft, cl: float) -> float:
     return aircraft.cd0 + aircraft.k * cl**2
 
 
-def drag(aircraft, velocity, altitude, weight=None) -> float:
+def drag(aircraft: Aircraft, velocity: float, altitude: float,
+         weight: float | None = None) -> float:
     """Total drag in N for level flight at the given condition."""
     cl = lift_coefficient(aircraft, velocity, altitude, weight)
     cd = drag_coefficient(aircraft, cl)
     return 0.5 * density(altitude) * velocity**2 * aircraft.wing_area * cd
 
 
-def lift_to_drag(aircraft, velocity, altitude, weight=None) -> float:
+def lift_to_drag(aircraft: Aircraft, velocity: float, altitude: float,
+                  weight: float | None = None) -> float:
     cl = lift_coefficient(aircraft, velocity, altitude, weight)
     return cl / drag_coefficient(aircraft, cl)
 
 
-def stall_speed(aircraft, altitude, weight=None) -> float:
+def stall_speed(aircraft: Aircraft, altitude: float,
+                 weight: float | None = None) -> float:
     """V_stall = sqrt(2W / (rho*S*CL_max))."""
     w = _weight(aircraft, weight)
     return math.sqrt(
@@ -62,7 +66,8 @@ def stall_speed(aircraft, altitude, weight=None) -> float:
 
 # ── Speeds with closed-form solutions ───────────────────────────────────────
 
-def v_min_drag(aircraft, altitude, weight=None) -> float:
+def v_min_drag(aircraft: Aircraft, altitude: float,
+                weight: float | None = None) -> float:
     """Minimum drag speed, V_md = sqrt( 2W/(rho*S) * sqrt(k/CD0) ).
 
     At this speed induced and parasite drag are equal and L/D is at its
@@ -75,7 +80,8 @@ def v_min_drag(aircraft, altitude, weight=None) -> float:
     )
 
 
-def v_max_range(aircraft, altitude, weight=None) -> float:
+def v_max_range(aircraft: Aircraft, altitude: float,
+                 weight: float | None = None) -> float:
     """Best-range speed for a jet, where CL = sqrt(CD0 / (3k)).
 
     Maximising range means maximising V*(L/D), not (L/D) — which is why this
@@ -88,7 +94,8 @@ def v_max_range(aircraft, altitude, weight=None) -> float:
 
 # ── Climb ───────────────────────────────────────────────────────────────────
 
-def rate_of_climb(aircraft, velocity, altitude, weight=None) -> float:
+def rate_of_climb(aircraft: Aircraft, velocity: float, altitude: float,
+                   weight: float | None = None) -> float:
     """RoC = V*(T - D)/W, m/s. Negative means it cannot hold that condition."""
     w = _weight(aircraft, weight)
     excess = aircraft.thrust_available(altitude, velocity) - drag(
@@ -97,7 +104,8 @@ def rate_of_climb(aircraft, velocity, altitude, weight=None) -> float:
     return velocity * excess / w
 
 
-def max_rate_of_climb(aircraft, altitude, weight=None) -> tuple[float, float]:
+def max_rate_of_climb(aircraft: Aircraft, altitude: float,
+                       weight: float | None = None) -> tuple[float, float]:
     """Best climb rate at an altitude and the speed that achieves it.
 
     Returns
@@ -121,7 +129,7 @@ def max_rate_of_climb(aircraft, altitude, weight=None) -> tuple[float, float]:
     return -result.fun, result.x
 
 
-def absolute_ceiling(aircraft, weight=None) -> float:
+def absolute_ceiling(aircraft: Aircraft, weight: float | None = None) -> float:
     """Altitude where the best rate of climb reaches zero, m.
 
     Raises if the aircraft cannot climb at sea level, rather than returning a
@@ -141,7 +149,7 @@ def absolute_ceiling(aircraft, weight=None) -> float:
     return brentq(best_roc, 0.0, H_MAX, xtol=1.0)
 
 
-def service_ceiling(aircraft, weight=None) -> float:
+def service_ceiling(aircraft: Aircraft, weight: float | None = None) -> float:
     """Altitude where the best rate of climb falls to 100 ft/min, m."""
     def excess(h: float) -> float:
         return max_rate_of_climb(aircraft, h, weight)[0] - SERVICE_CEILING_ROC
@@ -156,8 +164,9 @@ def service_ceiling(aircraft, weight=None) -> float:
 
 # ── Range and endurance ─────────────────────────────────────────────────────
 
-def breguet_range(aircraft, velocity, altitude, weight_initial=None,
-                  weight_final=None) -> float:
+def breguet_range(aircraft: Aircraft, velocity: float, altitude: float,
+                   weight_initial: float | None = None,
+                   weight_final: float | None = None) -> float:
     """Breguet range for a jet, R = (V/ct)*(L/D)*ln(Wi/Wf), in metres.
 
     Cruise is assumed at constant altitude and speed with L/D fixed at its
@@ -176,8 +185,9 @@ def breguet_range(aircraft, velocity, altitude, weight_initial=None,
     return (velocity / ct) * ld * math.log(wi / wf)
 
 
-def endurance(aircraft, velocity, altitude, weight_initial=None,
-              weight_final=None) -> float:
+def endurance(aircraft: Aircraft, velocity: float, altitude: float,
+              weight_initial: float | None = None,
+              weight_final: float | None = None) -> float:
     """Jet endurance, E = (1/ct)*(L/D)*ln(Wi/Wf), in seconds.
 
     Maximised at V_md — where range is maximised at V_max_range. The two
@@ -193,7 +203,8 @@ def endurance(aircraft, velocity, altitude, weight_initial=None,
     return (1.0 / ct) * ld * math.log(wi / wf)
 
 
-def payload_range_points(aircraft, velocity, altitude):
+def payload_range_points(aircraft: Aircraft, velocity: float,
+                          altitude: float) -> list[tuple[float, float]]:
     """The four corners of a payload-range diagram.
 
     Returns [(range_m, payload_kg), ...] for:
@@ -237,7 +248,8 @@ def payload_range_points(aircraft, velocity, altitude):
     ]
 
 
-def max_level_speed(aircraft, altitude, weight=None) -> float | None:
+def max_level_speed(aircraft: Aircraft, altitude: float,
+                     weight: float | None = None) -> float | None:
     """Fastest speed where thrust still matches drag, m/s.
 
     Returns None when the aircraft cannot sustain level flight at all at this
@@ -260,7 +272,8 @@ def max_level_speed(aircraft, altitude, weight=None) -> float | None:
     return None
 
 
-def min_level_speed(aircraft, altitude, weight=None) -> float | None:
+def min_level_speed(aircraft: Aircraft, altitude: float,
+                     weight: float | None = None) -> float | None:
     """Slowest speed where level flight is actually sustainable, m/s.
 
     Not the same as stall speed. Low and slow, induced drag climbs steeply, and

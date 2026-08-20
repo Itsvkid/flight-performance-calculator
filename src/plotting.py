@@ -17,6 +17,8 @@ import numpy as np
 
 matplotlib.use("Agg")  # no display on a headless run
 import matplotlib.pyplot as plt  # noqa: E402
+from matplotlib.axes import Axes  # noqa: E402
+from matplotlib.figure import Figure  # noqa: E402
 
 from . import performance as perf  # noqa: E402
 from .aircraft import Aircraft  # noqa: E402
@@ -63,11 +65,12 @@ def use_theme(name: str) -> None:
     _ACTIVE = THEMES[name]
 
 
-def _c(role: str):
+def _c(role: str) -> str:
     return _ACTIVE[role]
 
 
-def _axes(title: str, xlabel: str, ylabel: str, size=(8.0, 5.0)):
+def _axes(title: str, xlabel: str, ylabel: str,
+          size: tuple[float, float] = (8.0, 5.0)) -> tuple[Figure, Axes]:
     """A figure with recessive grid and axes, so the data carries the ink."""
     fig, ax = plt.subplots(figsize=size, dpi=DPI)
     fig.patch.set_facecolor(_c("surface"))
@@ -88,7 +91,7 @@ def _axes(title: str, xlabel: str, ylabel: str, size=(8.0, 5.0)):
     return fig, ax
 
 
-def _save(fig, path: str | Path | None):
+def _save(fig: Figure, path: str | Path | None) -> Figure:
     if path is not None:
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -97,7 +100,7 @@ def _save(fig, path: str | Path | None):
 
 
 def thrust_curves(aircraft: Aircraft, altitude: float = 10000.0,
-                  path=None):
+                  path: str | Path | None = None) -> Figure:
     """Thrust required and thrust available against true airspeed.
 
     Where the curves cross bounds level flight; the gap between them is what
@@ -151,7 +154,7 @@ def thrust_curves(aircraft: Aircraft, altitude: float = 10000.0,
     return _save(fig, path)
 
 
-def flight_envelope(aircraft: Aircraft, path=None):
+def flight_envelope(aircraft: Aircraft, path: str | Path | None = None) -> Figure:
     """Altitude against true airspeed — where level flight is possible.
 
     Bounded on the left by stall and on the right by available thrust. The two
@@ -212,7 +215,8 @@ def flight_envelope(aircraft: Aircraft, path=None):
 
 
 def payload_range(aircraft: Aircraft, velocity: float | None = None,
-                  altitude: float = 10000.0, path=None):
+                  altitude: float = 10000.0,
+                  path: str | Path | None = None) -> Figure:
     """The payload-range trade.
 
     Flat while the tanks still have room, then sloped once fuel is the binding
@@ -247,8 +251,8 @@ def payload_range(aircraft: Aircraft, velocity: float | None = None,
     return _save(fig, path)
 
 
-def generate_all(aircraft: Aircraft, directory="figures", theme="light",
-                 suffix=""):
+def generate_all(aircraft: Aircraft, directory: str | Path = "figures",
+                 theme: str = "light", suffix: str = "") -> list[Path]:
     """Write every figure in one theme. Returns the paths written."""
     use_theme(theme)
     directory = Path(directory)

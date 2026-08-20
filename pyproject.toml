@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "flight-performance-calculator"
+version = "1.0.0"
+description = "Aircraft flight performance from first principles — ISA atmosphere, drag polar, climb, ceilings and range, validated against published data."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+dependencies = [
+    "numpy>=2.0",
+    "scipy>=1.14",
+    "matplotlib>=3.9",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[tool.setuptools]
+# The package is literally named "src" — every project in this portfolio
+# uses `from src.module import X` consistently (see projects 04-07), and
+# renaming it here to `pip install` cleanly would break that convention for
+# a name nothing else needs. `pip install -e .` makes `import src` work from
+# anywhere rather than only from this directory on PYTHONPATH, which is the
+# actual point of packaging this at all.
+packages = ["src"]
+
+[tool.setuptools.package-data]
+src = ["py.typed"]

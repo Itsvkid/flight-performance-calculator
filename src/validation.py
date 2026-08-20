@@ -137,7 +137,7 @@ def evaluate(reference: Reference) -> dict:
     v_max = perf.max_level_speed(ac, reference.cruise_altitude)
     mach_max = v_max / at(reference.cruise_altitude).sound_speed if v_max else None
 
-    def err(model, published):
+    def err(model: float, published: float) -> float:
         return 100.0 * (model - published) / published
 
     return {

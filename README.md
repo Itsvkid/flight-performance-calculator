@@ -28,8 +28,8 @@ tuned away.
 ## Quick start
 
 ```bash
-pip install -r requirements.txt
-python3 -m pytest          # 52 tests
+pip install -e ".[dev]"
+python3 -m pytest          # 55 tests
 ```
 
 ```python
