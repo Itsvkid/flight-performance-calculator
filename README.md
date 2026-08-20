@@ -1,5 +1,7 @@
 # Aircraft flight performance calculator
 
+[![CI](https://github.com/Itsvkid/flight-performance-calculator/actions/workflows/ci.yml/badge.svg)](https://github.com/Itsvkid/flight-performance-calculator/actions/workflows/ci.yml)
+
 Classical flight-performance metrics computed from first principles — ISA
 atmosphere, a parabolic drag polar, thrust lapse with altitude and Mach — and
 checked against published data for three real aircraft.
