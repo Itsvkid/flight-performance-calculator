@@ -36,23 +36,54 @@ def lift_coefficient(aircraft: Aircraft, velocity: float, altitude: float,
     return 2.0 * w / (density(altitude) * velocity**2 * aircraft.wing_area)
 
 
-def drag_coefficient(aircraft: Aircraft, cl: float) -> float:
-    """Parabolic polar: CD = CD0 + k*CL^2."""
-    return aircraft.cd0 + aircraft.k * cl**2
+def wave_drag_coefficient(aircraft: Aircraft, mach: float) -> float:
+    """Compressibility drag rise above the drag-divergence Mach number:
+
+        CD_wave = 20*(M - M_dd)^4   for M > M_dd, else 0
+
+    A widely used empirical quartic engineering correlation for subsonic
+    wave-drag rise (see e.g. Anderson, "Aircraft Performance and Design") —
+    not a first-principles result, and it depends only on M - M_dd rather
+    than separately on sweep, thickness-to-chord or CL the way a real
+    wing's drag rise actually does. It exists to fix one specific,
+    documented failure (see VALIDATION.md, "Maximum speed"): a parabolic
+    polar alone never stops the solver finding a transonic thrust-drag
+    intersection, so every predicted maximum speed above about Mach 0.8 was
+    meaningless. This term makes that failure mode structurally impossible
+    rather than bounding the result after the fact.
+    """
+    if mach <= aircraft.mach_dd:
+        return 0.0
+    return 20.0 * (mach - aircraft.mach_dd) ** 4
+
+
+def drag_coefficient(aircraft: Aircraft, cl: float, mach: float = 0.0) -> float:
+    """Parabolic polar plus wave drag: CD = CD0 + k*CL^2 + CD_wave(M).
+
+    mach defaults to 0 (no compressibility correction), so the closed-form
+    reference quantities in Aircraft (cl_min_drag, lift_to_drag_max) and the
+    speeds derived from them (v_min_drag, v_max_range) stay exactly what
+    their docstrings say: incompressible-polar optima. Every caller in this
+    module that has a real Mach number to offer now passes it.
+    """
+    return aircraft.cd0 + aircraft.k * cl**2 + wave_drag_coefficient(aircraft, mach)
 
 
 def drag(aircraft: Aircraft, velocity: float, altitude: float,
          weight: float | None = None) -> float:
-    """Total drag in N for level flight at the given condition."""
+    """Total drag in N for level flight at the given condition, including
+    compressibility drag above the aircraft's drag-divergence Mach number."""
     cl = lift_coefficient(aircraft, velocity, altitude, weight)
-    cd = drag_coefficient(aircraft, cl)
+    mach = velocity / at(altitude).sound_speed
+    cd = drag_coefficient(aircraft, cl, mach)
     return 0.5 * density(altitude) * velocity**2 * aircraft.wing_area * cd
 
 
 def lift_to_drag(aircraft: Aircraft, velocity: float, altitude: float,
                   weight: float | None = None) -> float:
     cl = lift_coefficient(aircraft, velocity, altitude, weight)
-    return cl / drag_coefficient(aircraft, cl)
+    mach = velocity / at(altitude).sound_speed
+    return cl / drag_coefficient(aircraft, cl, mach)
 
 
 def stall_speed(aircraft: Aircraft, altitude: float,

@@ -29,7 +29,7 @@ tuned away.
 
 ```bash
 pip install -e ".[dev]"
-python3 -m pytest          # 55 tests
+python3 -m pytest          # 63 tests
 ```
 
 ```python
@@ -58,18 +58,22 @@ band is the honest form of agreement.
 |---|---|
 | Service ceiling | Within 8% on all three. Two published figures fall outside the drag-polar band — the 777 gap is weight (the model returns the published 13.1 km at 92% MTOW), the A320 gap is not, and is most likely a certified operating altitude rather than a performance ceiling |
 | Range | Right order, wrong definition — the model burns all fuel in cruise while published range carries reserves. Use the implied-payload column, not the percentage |
-| **Maximum speed** | **Not usable above M 0.8** — see below |
+| **Maximum speed** | Improved by a wave-drag term (M~1.0–1.1 → M~0.91–0.98) but still above published MMO — see below |
 | (L/D)max | 17–18 across all three, the right band for a jet transport |
 
 ## Known limitations
 
-**No compressibility drag.** The parabolic polar has no wave-drag term, so drag
-never rises at the divergence Mach number and the solver happily finds a
-transonic thrust–drag intersection. The model predicts a maximum speed of Mach
-0.98–1.09 for aircraft that cruise at 0.78–0.84. **Any maximum-speed result
-above about Mach 0.8 is meaningless**, and the flight envelope's right-hand
-boundary inherits the same caution. Adding a wave-drag rise above M_dd is the
-clearest next improvement.
+**Compressibility drag is a simplified correlation.** `performance.
+wave_drag_coefficient` adds `CD_wave = 20*(M - mach_dd)^4` above each
+aircraft's drag-divergence Mach number — a widely used empirical quartic
+engineering correlation, not a first-principles result, and it depends only
+on `M - mach_dd` rather than separately on sweep, thickness-to-chord or CL
+the way a real wing's drag rise does. It substantially improves the model
+(predicted maximum speed went from Mach 0.98–1.09 to 0.91–0.98) but every
+aircraft's model maximum still sits above its own published MMO — see
+VALIDATION.md, "Maximum speed", for the honest remaining gap rather than a
+claim this is fully fixed. `mach_dd` itself is a class-typical estimate,
+the same as CD0 and Oswald, not measured or published data.
 
 **Cruise is flown at constant altitude and speed.** Real aircraft step-climb as
 fuel burns to hold CL near its optimum. For the 777-300ER, L/D decays from 18.0
@@ -107,5 +111,5 @@ src/aircraft.py      geometry, drag polar, engine
 src/performance.py   drag, climb, ceilings, range, endurance
 src/plotting.py      figures on a colour-vision-validated palette
 src/validation.py    published-data comparison, generates VALIDATION.md
-tests/               52 tests
+tests/               63 tests
 ```

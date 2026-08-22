@@ -58,6 +58,95 @@ def test_cl_at_min_drag_matches_closed_form():
     )
 
 
+# ── Compressibility (wave) drag ─────────────────────────────────────────────
+
+def test_wave_drag_is_zero_at_and_below_mach_dd():
+    assert perf.wave_drag_coefficient(AC, AC.mach_dd) == 0.0
+    assert perf.wave_drag_coefficient(AC, AC.mach_dd - 0.1) == 0.0
+
+
+def test_wave_drag_matches_the_closed_form_above_mach_dd():
+    mach = AC.mach_dd + 0.05
+    expected = 20.0 * (mach - AC.mach_dd) ** 4
+    assert perf.wave_drag_coefficient(AC, mach) == pytest.approx(expected)
+
+
+def test_wave_drag_rises_with_mach_above_mach_dd():
+    """Not just nonzero — actually rising, which is the entire point of a
+    'divergence' term."""
+    values = [perf.wave_drag_coefficient(AC, m)
+              for m in (AC.mach_dd, AC.mach_dd + 0.02, AC.mach_dd + 0.05,
+                        AC.mach_dd + 0.10)]
+    assert values == sorted(values)
+    assert values[0] == 0.0
+    assert values[-1] > 0.0
+
+
+def test_drag_coefficient_default_mach_is_the_pure_parabolic_polar():
+    """No mach argument (the default) must reproduce exactly what the
+    module produced before wave drag existed — this is the regression
+    guard for every closed-form aerodynamic identity elsewhere in this
+    file that still assumes an incompressible polar."""
+    cl = 0.5
+    assert perf.drag_coefficient(AC, cl) == pytest.approx(AC.cd0 + AC.k * cl**2)
+
+
+def test_drag_below_mach_dd_matches_the_incompressible_polar():
+    """Regression guard for drag() itself, not just drag_coefficient(): at
+    a subsonic condition well below mach_dd, adding the mach-aware wave-drag
+    term must not have changed anything."""
+    altitude = 3000
+    velocity = 150.0
+    cl = perf.lift_coefficient(AC, velocity, altitude)
+    cd_incompressible = AC.cd0 + AC.k * cl**2
+    expected = 0.5 * density(altitude) * velocity**2 * AC.wing_area * cd_incompressible
+    assert perf.drag(AC, velocity, altitude) == pytest.approx(expected)
+
+
+def test_drag_above_mach_dd_matches_an_independent_recomputation():
+    """An independent-route check, not a re-run of the same code path: drag
+    is recomputed here from the raw dynamic-pressure formula with the wave
+    term added by hand, rather than by calling drag_coefficient at all."""
+    from src.atmosphere import at
+
+    altitude = 10000
+    velocity = 0.9 * at(altitude).sound_speed  # comfortably past AC.mach_dd
+    mach = velocity / at(altitude).sound_speed
+    assert mach > AC.mach_dd
+
+    cl = perf.lift_coefficient(AC, velocity, altitude)
+    cd = AC.cd0 + AC.k * cl**2 + 20.0 * (mach - AC.mach_dd) ** 4
+    expected = 0.5 * density(altitude) * velocity**2 * AC.wing_area * cd
+    assert perf.drag(AC, velocity, altitude) == pytest.approx(expected)
+
+
+def test_aircraft_rejects_mach_dd_out_of_range():
+    with pytest.raises(ValueError, match="mach_dd"):
+        Aircraft(
+            name="Bad", mass=70000.0, fuel_mass=18000.0, wing_area=124.6,
+            span=34.3, cd0=0.020, oswald=0.80, thrust_sl=2 * 110000.0,
+            tsfc=1.7e-5, mach_dd=1.2,
+        )
+
+
+def test_max_level_speed_no_longer_approaches_mach_one():
+    """The regression test for the bug this whole feature exists to fix
+    (see VALIDATION.md, 'Maximum speed'): before wave drag, this model
+    predicted a maximum level speed around Mach 0.98-1.09 for aircraft that
+    actually cruise at 0.78-0.84, because a parabolic polar alone never
+    stops the solver finding a transonic thrust-drag intersection. It
+    still isn't perfect — see VALIDATION.md for the honest remaining gap —
+    but it must no longer be able to reach transonic/supersonic speeds at
+    all."""
+    from src.atmosphere import at
+
+    altitude = 11000
+    v_max = perf.max_level_speed(AC, altitude)
+    assert v_max is not None
+    mach_max = v_max / at(altitude).sound_speed
+    assert mach_max < 0.98
+
+
 # ── Best-range speed ────────────────────────────────────────────────────────
 
 def test_range_speed_is_3_to_the_quarter_above_min_drag():
@@ -67,8 +156,18 @@ def test_range_speed_is_3_to_the_quarter_above_min_drag():
 
 
 def test_range_is_actually_maximised_at_that_speed():
-    """Numerically maximise V*(L/D) and confirm it agrees."""
-    altitude = 10000
+    """Numerically maximise V*(L/D) and confirm it agrees.
+
+    altitude=8000, not 10000: v_max_range's closed form is an incompressible-
+    polar optimum (see drag_coefficient's docstring), valid only where wave
+    drag is actually negligible. At 10000 m, V_max_range for AC sits at Mach
+    0.865 — past AC.mach_dd (0.80) — so wave drag genuinely pulls the true
+    optimum down from the incompressible closed form there, and the search
+    correctly disagrees with it. At 8000 m, V_max_range's Mach is 0.75,
+    comfortably below mach_dd, which is the regime this identity actually
+    describes.
+    """
+    altitude = 8000
     result = minimize_scalar(
         lambda v: -perf.breguet_range(AC, v, altitude),
         bounds=(120, 500), method="bounded", options={"xatol": 1e-8},

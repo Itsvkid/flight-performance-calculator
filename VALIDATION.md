@@ -9,10 +9,10 @@ python3 -c "from src.validation import report; report('VALIDATION.md')"
 ## What is being compared, and what that is worth
 
 Manufacturers publish geometry, masses, thrust and performance. They do
-**not** publish CD0 or Oswald efficiency — those are derived properties of
-the whole configuration. The values used here are typical-for-class
-estimates from the open literature, so a single computed number is partly
-a test of that estimate rather than of the model.
+**not** publish CD0, Oswald efficiency or a drag-divergence Mach number —
+those are derived properties of the whole configuration. The values used
+here are typical-for-class estimates from the open literature, so a single
+computed number is partly a test of that estimate rather than of the model.
 
 Each result therefore carries a band: the model swept across
 CD0 0.017-0.024 and Oswald 0.75-0.85.
@@ -92,25 +92,39 @@ The 'payload implied' column is the more useful comparison: it says what
 payload the published range corresponds to under this model, rather than
 asserting agreement between two differently-defined numbers.
 
-## Maximum speed — where the model plainly fails
+## Maximum speed — better, still not right
 
-| Aircraft | Model max Mach at 11 km | Published cruise Mach |
-|---|---|---|
-| Boeing 737-800 | 0.98 | 0.79 |
-| Airbus A320-200 | 1.01 | 0.78 |
-| Boeing 777-300ER | 1.09 | 0.84 |
+| Aircraft | Model max Mach at 11 km | Mach_dd (model input) | Published MMO | Published cruise Mach |
+|---|---|---|---|---|
+| Boeing 737-800 | 0.91 | 0.80 | 0.82 | 0.79 |
+| Airbus A320-200 | 0.92 | 0.80 | 0.82 | 0.78 |
+| Boeing 777-300ER | 0.98 | 0.86 | 0.89 | 0.84 |
 
-The model predicts these aircraft can reach roughly Mach 1. They cannot.
+Before a wave-drag term existed, the model predicted roughly Mach 1 for all
+three — a parabolic polar has no compressibility term, so drag never rises
+at the divergence Mach number and nothing stopped the solver from finding a
+transonic thrust-drag intersection. `performance.wave_drag_coefficient` adds
+an empirical quartic rise, `CD_wave = 20*(M - M_dd)^4` above each aircraft's
+`mach_dd`, and that alone roughly halves the overshoot: 0.98-1.09 becomes
+0.91-0.98.
 
-The parabolic drag polar has no compressibility term, so drag never rises
-at the divergence Mach number and nothing stops the solver from finding a
-transonic thrust-drag intersection. **Any maximum-speed number this model
-produces above about Mach 0.8 is meaningless**, and the flight envelope's
-right-hand boundary should be read with the same caution above that speed.
+**It does not fully fix it.** Every model max Mach above still sits above the
+aircraft's own published MMO — a real structural placard limit no aircraft
+can exceed regardless of available thrust. A quartic correlation in
+`M - M_dd` alone, with no dependence on sweep, thickness-to-chord or CL the
+way a real wing's drag rise does, recovers most of the physical behaviour
+but not all of it: for a given thrust margin it is possible to find a Mach
+past M_dd where the rise still isn't quite steep enough to stop the solver.
+`mach_dd` itself is also a class-typical estimate here, the same as CD0 and
+oswald, not a measured or published number — MMO is published, but MMO is a
+structural/handling limit set with margin above M_dd, not M_dd itself, so it
+is the right number to validate against and the wrong number to have set
+`mach_dd` equal to.
 
-This is the most useful thing the validation found, and it was invisible
-in every unit test — the number is self-consistent, it is simply not
-physical. Adding a wave-drag rise above M_dd is the obvious next step.
+The honest reading: this is a real improvement recorded as one, not a fix
+presented as complete. The flight envelope's right-hand boundary is now
+physically shaped (it tapers toward `mach_dd`, not toward Mach 1) but should
+still be read as an upper estimate above roughly the published MMO.
 
 ## Summary
 
@@ -118,9 +132,10 @@ physical. Adding a wave-drag rise above M_dd is the obvious next step.
 |---|---|
 | Service ceiling | Trustworthy — within a few percent, published values inside the drag-polar band |
 | Range | Right order, wrong definition. Use the implied-payload column, not the percentage |
-| Maximum speed | Not usable above M 0.8 — no compressibility drag |
+| Maximum speed | Improved by the wave-drag term (M~1.0-1.1 to M~0.91-0.98) but still above published MMO — see above |
 | (L/D)max | 17-18 across all three, which is the right band for a jet transport |
 
 The honest one-line summary: the model is sound where it is only balancing
 thrust against drag, and optimistic wherever the real answer depends on how
-the flight is actually operated.
+the flight is actually operated or how steeply compressibility drag really
+rises for a specific wing.

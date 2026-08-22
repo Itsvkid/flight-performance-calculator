@@ -36,6 +36,10 @@ class Aircraft:
     lapse_exp     thrust lapse exponent n in T(h) = T_sl * sigma**n
     oew           operating empty mass, kg — needed for payload-range
     max_payload   maximum structural payload, kg
+    mach_dd       drag-divergence Mach number — where compressibility drag
+                  starts rising steeply (see performance.wave_drag_coefficient).
+                  Like cd0 and oswald, this is not something manufacturers
+                  publish; it is a class-typical estimate, not measured data.
     """
 
     name: str
@@ -51,6 +55,7 @@ class Aircraft:
     lapse_exp: float = 0.7
     oew: float | None = None
     max_payload: float | None = None
+    mach_dd: float = 0.80
 
     def __post_init__(self) -> None:
         for field, value in (
@@ -64,6 +69,8 @@ class Aircraft:
                 raise ValueError(f"{field} must be positive, got {value}")
         if not 0 < self.oswald <= 1:
             raise ValueError(f"oswald must be in (0, 1], got {self.oswald}")
+        if not 0 < self.mach_dd < 1:
+            raise ValueError(f"mach_dd must be in (0, 1), got {self.mach_dd}")
         if self.fuel_mass >= self.mass:
             raise ValueError("fuel_mass cannot equal or exceed total mass")
         if self.oew is not None and self.max_payload is not None:
@@ -160,4 +167,5 @@ NARROWBODY_TWIN = Aircraft(
     cl_max=1.5,
     oew=41500.0,
     max_payload=18000.0,
+    mach_dd=0.80,
 )
